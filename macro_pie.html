@@ -107,8 +107,9 @@ grist.onRecord(function(record, mappings) {
   const colors = ['#5DCAA5', '#7F77DD', '#EF9F27'];
 
   if (chart) {
-    chart.destroy();
-    chart = null;
+    chart.data.labels = labels;
+    chart.data.datasets[0].data = data;
+    chart.update('none'); // 'none'表示跳过动画，强制完整重绘
   } else {
     chart = new Chart(document.getElementById('chart'), {
       type: 'pie',
