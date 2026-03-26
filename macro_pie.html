@@ -98,7 +98,7 @@ grist.onRecord(function(record, mappings) {
   document.getElementById('subtitle1').textContent =
     (calorie_calculated != null ? '计算总热量 ' + Math.round(calorie_calculated) + ' kcal/份' : '计算总热量值为空');
   document.getElementById('subtitle2').textContent =  
-  + (calorie_label != null ? '标签总热量 ' + Math.round(calorie_label) + ' kcal/份' : '标签总热量未录入');
+    (calorie_label != null ? '标签总热量 ' + Math.round(calorie_label) + ' kcal/份' : '标签总热量未录入');
 
   const labels = [
     '蛋白质 ' + Math.round(protein * 100) + '%',
