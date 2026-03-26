@@ -97,9 +97,9 @@ grist.onRecord(function(record, mappings) {
       : '总热量未录入';
 
   const labels = [
-    '蛋白质 ' + protein + '%',
-    '碳水化合物 ' + carbo + '%',
-    '脂肪 ' + fat + '%'
+    '蛋白质 ' + math.round(protein * 100) + '%',
+    '碳水化合物 ' + math.round(carbo * 100) + '%',
+    '脂肪 ' + math.round(fat * 100) + '%'
   ];
   const data = [protein, carbo, fat];
   const colors = ['#5DCAA5', '#7F77DD', '#EF9F27'];
