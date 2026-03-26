@@ -62,7 +62,7 @@ grist.ready({ requiredAccess: 'read table' });
 
 grist.onRecord(function(record) {
   const name = record.formulaCN || '未命名配方';
-  const calories = record.calorie_caculated;
+  const calories = record.calorie_calculated;
   const protein = record.protein_ratio || 0;
   const carbo = record.carbo_ratio || 0;
   const fat = record.fat_ratio || 0;
