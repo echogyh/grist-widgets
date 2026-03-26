@@ -94,12 +94,9 @@ grist.onRecord(function(record, mappings) {
   document.getElementById('empty').style.display = 'none';
   document.getElementById('title').textContent = name;
   document.getElementById('subtitle').textContent =
-    calorie_calculated != null
-      ? '计算总热量 ' + Math.round(calorie_calculated) + ' kcal / 份'
-      : '计算总热量值为空';
-   calorie_label != null
-      ? '标签总热量 ' + Math.round(calorie_label) + ' kcal / 份'
-      : '标签总热量未录入';
+    (calorie_calculated != null ? '计算总热量 ' + Math.round(calorie_calculated) + ' kcal/份' : '计算总热量值为空')
+  + '　｜　'
+  + (calorie_label != null ? '标签总热量 ' + Math.round(calorie_label) + ' kcal/份' : '标签总热量未录入');
 
   const labels = [
     '蛋白质 ' + Math.round(protein * 100) + '%',
