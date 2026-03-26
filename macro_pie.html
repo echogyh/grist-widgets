@@ -25,7 +25,7 @@ body {
   margin-bottom: 4px;
   line-height: 1.4;
 }
-.subtitle {
+.subtitle1, .subtitle2 {
   font-size: 12px;
   color: #888780;
   text-align: center;
@@ -42,14 +42,15 @@ body {
 }
 @media (prefers-color-scheme: dark) {
   .title { color: #e8e6df; }
-  .subtitle { color: #6e6d68; }
+  .subtitle1, .subtitle2 { color: #6e6d68; }
 }
 </style>
 </head>
 <body>
 
 <div class="title" id="title">—</div>
-<div class="subtitle" id="subtitle">—</div>
+<div class="subtitle1" id="subtitle1">—</div>
+<div class="subtitle2" id="subtitle2">—</div>  
 <div class="chart-wrap">
   <canvas id="chart"></canvas>
 </div>
@@ -86,16 +87,17 @@ grist.onRecord(function(record, mappings) {
   if (total === 0) {
     document.getElementById('empty').style.display = 'block';
     document.getElementById('title').textContent = '—';
-    document.getElementById('subtitle').textContent = '—';
+    document.getElementById('subtitle1').textContent = '—';
+    document.getElementById('subtitle2').textContent = '—';
     if (chart) { chart.destroy(); chart = null; }
     return;
   }
 
   document.getElementById('empty').style.display = 'none';
   document.getElementById('title').textContent = name;
-  document.getElementById('subtitle').textContent =
-    (calorie_calculated != null ? '计算总热量 ' + Math.round(calorie_calculated) + ' kcal/份' : '计算总热量值为空')
-  + '　｜　'
+  document.getElementById('subtitle1').textContent =
+    (calorie_calculated != null ? '计算总热量 ' + Math.round(calorie_calculated) + ' kcal/份' : '计算总热量值为空');
+  document.getElementById('subtitle2').textContent =  
   + (calorie_label != null ? '标签总热量 ' + Math.round(calorie_label) + ' kcal/份' : '标签总热量未录入');
 
   const labels = [
