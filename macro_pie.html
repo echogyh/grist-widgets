@@ -75,7 +75,8 @@ grist.onRecord(function(record, mappings) {
   const mapped = grist.mapColumnNames(record, mappings);
   
   const name = mapped.formulaCN || record.formulaCN || '未命名配方';
-  const calories = mapped.calorie_caculated ?? record.calorie_caculated;
+  const calorie_calculated = mapped.calorie_calculated ?? record.calorie_calculated;
+  const calorie_label = mapped.calorie_label ?? record.calorie_label;
   const protein = mapped.protein_ratio ?? record.protein_ratio ?? 0;
   const carbo = mapped.carbo_ratio ?? record.carbo_ratio ?? 0;
   const fat = mapped.fat_ratio ?? record.fat_ratio ?? 0;
@@ -92,9 +93,12 @@ grist.onRecord(function(record, mappings) {
   document.getElementById('empty').style.display = 'none';
   document.getElementById('title').textContent = name;
   document.getElementById('subtitle').textContent =
-    calories != null
-      ? '总热量 ' + Math.round(calories) + ' kcal / 份'
-      : '总热量未录入';
+    calorie_calculated != null
+      ? '计算总热量 ' + Math.round(calorie_calculated) + ' kcal / 份'
+      : '计算总热量值为空';
+   calorie_label != null
+      ? '标签总热量 ' + Math.round(calorie_label) + ' kcal / 份'
+      : '标签总热量未录入';
 
   const labels = [
     '蛋白质 ' + Math.round(protein * 100) + '%',
