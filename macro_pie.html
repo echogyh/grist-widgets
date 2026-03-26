@@ -70,6 +70,8 @@ grist.ready({
 });
 
 grist.onRecord(function(record, mappings) {
+    console.log('record:', JSON.stringify(record));
+
   const mapped = grist.mapColumnNames(record, mappings);
   
   const name = mapped.formulaCN || record.formulaCN || '未命名配方';
