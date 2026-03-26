@@ -105,9 +105,8 @@ grist.onRecord(function(record, mappings) {
   const colors = ['#5DCAA5', '#7F77DD', '#EF9F27'];
 
   if (chart) {
-    chart.data.labels = labels;
-    chart.data.datasets[0].data = data;
-    chart.update();
+    chart.destroy();
+    chart = null;
   } else {
     chart = new Chart(document.getElementById('chart'), {
       type: 'pie',
