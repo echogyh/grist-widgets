@@ -58,14 +58,25 @@ body {
 <script>
 let chart = null;
 
-grist.ready({ requiredAccess: 'read table' });
+grist.ready({ 
+  requiredAccess: 'read table',
+  columns: [
+    { name: 'formulaCN', type: 'Text' },
+    { name: 'calorie_caculated', type: 'Numeric' },
+    { name: 'protein_ratio', type: 'Numeric' },
+    { name: 'carbo_ratio', type: 'Numeric' },
+    { name: 'fat_ratio', type: 'Numeric' }
+  ]
+});
 
-grist.onRecord(function(record) {
-  const name = record.formulaCN || '未命名配方';
-  const calories = record.calorie_calculated;
-  const protein = record.protein_ratio || 0;
-  const carbo = record.carbo_ratio || 0;
-  const fat = record.fat_ratio || 0;
+grist.onRecord(function(record, mappings) {
+  const mapped = grist.mapColumnNames(record, mappings);
+  
+  const name = mapped.formulaCN || record.formulaCN || '未命名配方';
+  const calories = mapped.calorie_caculated ?? record.calorie_caculated;
+  const protein = mapped.protein_ratio ?? record.protein_ratio ?? 0;
+  const carbo = mapped.carbo_ratio ?? record.carbo_ratio ?? 0;
+  const fat = mapped.fat_ratio ?? record.fat_ratio ?? 0;
 
   const total = protein + carbo + fat;
   if (total === 0) {
