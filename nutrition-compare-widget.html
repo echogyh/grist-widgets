@@ -245,8 +245,8 @@
 // ★ 配置区：如果加载失败，请先用 grist.docApi.listTables() 查出真实 Table ID
 //   然后把下面两个值改成对应的 Table ID（区分大小写）
 // ─────────────────────────────────────────────────────────────────────────────
-const TABLE_FORMULA        = 'formula';        // formula 表的 Table ID
-const TABLE_NUTRITION_FACTS = 'nutrition_facts'; // nutrition_facts 表的 Table ID
+const TABLE_FORMULA         = 'formula';         // formula 表的 Table ID
+const TABLE_NUTRITION_FACTS = 'nutrition_facts';  // nutrition_facts 表的 Table ID
 
 // ─────────────────────────────────────────────────────────────────────────────
 // 全局状态
@@ -263,7 +263,9 @@ grist.ready({ requiredAccess: 'read table' });
 
 async function loadData() {
   try {
-    // 并行拉取两张表
+    // 并行拉取两张表即可——不需要单独拉取 nutrient 表，
+    // 因为 nutrition_facts.nutrient_name_cn_text 是公式字段（$nutrient_name_cn.nutrient_name_cn），
+    // Grist 在 fetchTable 时会返回已经计算好的字符串值，省去了手动跨表解析的步骤。
     const [formulaData, nutritionData] = await Promise.all([
       grist.docApi.fetchTable(TABLE_FORMULA),
       grist.docApi.fetchTable(TABLE_NUTRITION_FACTS)
@@ -271,9 +273,9 @@ async function loadData() {
 
     // ── 解析 formula 表 ──────────────────────────────────────────────────────
     // Grist fetchTable 返回列式数据：{ id: [...], formula_name_cn: [...], ... }
-    // id 是 Grist 内部行 ID，Reference 字段存储的就是这个值
-    const fRowIds   = formulaData.id;
-    const fNames    = formulaData.formula_name_cn;
+    // id 是 Grist 内部行 ID，Reference 字段存储的就是这个整数值
+    const fRowIds = formulaData.id;
+    const fNames  = formulaData.formula_name_cn;
 
     formulaList = [];
     formulaRowIdToName = {};
@@ -283,14 +285,15 @@ async function loadData() {
     }
 
     // ── 解析 nutrition_facts 表 ──────────────────────────────────────────────
-    // formula_name_cn 列是 Reference 类型，fetchTable 返回被引用行的 Grist row ID（整数）
+    // formula_name_cn：Reference 字段，需要用上面的映射表解析为字符串
+    // nutrient_name_cn_text：公式字段，fetchTable 直接返回计算好的中文名称字符串，无需解析
+    // nutrient_fact_order：公式字段，fetchTable 直接返回计算好的数值，无需解析
     const len = nutritionData.id.length;
     allFacts = [];
     for (let i = 0; i < len; i++) {
       allFacts.push({
-        // 将 Reference row ID 解析为实际的 formula_name_cn 字符串
         formulaName:  formulaRowIdToName[nutritionData.formula_name_cn[i]] ?? null,
-        nutrientName: nutritionData.nutrient_name_cn[i],
+        nutrientName: nutritionData.nutrient_name_cn_text[i] ?? null,  // 公式字段，直接使用
         unit:         nutritionData.nutrient_fact_unit[i] ?? '',
         value:        nutritionData.nutrient_value[i],
         order:        nutritionData.nutrient_fact_order[i] ?? 9999
