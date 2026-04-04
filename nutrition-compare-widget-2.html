@@ -1,0 +1,520 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>配方营养成分对比</title>
+  <script src="https://docs.getgrist.com/grist-plugin-api.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:         #f7f8fa;
+      --surface:    #ffffff;
+      --border:     #e3e6ec;
+      --text-main:  #1a1d24;
+      --text-sub:   #5f6577;
+      --text-muted: #9ba3b8;
+      --accent:     #2962ff;
+      --accent-bg:  #e8eeff;
+      --row-diff-bg:#fff8e1;
+      --row-diff-fg:#c84b00;
+      --row-alt:    #f4f6fb;
+      --header-bg:  #f0f3ff;
+      --shadow:     0 1px 4px rgba(0,0,0,.08);
+      --radius:     8px;
+    }
+
+    body {
+      font-family: 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', sans-serif;
+      font-size: 13px;
+      background: var(--bg);
+      color: var(--text-main);
+      padding: 14px 16px;
+    }
+
+    /* ── 选择器面板 ───────────────────────────── */
+    #selector-panel {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 12px 14px;
+      margin-bottom: 14px;
+      box-shadow: var(--shadow);
+    }
+    .panel-title {
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: .06em;
+      text-transform: uppercase;
+      color: var(--text-sub);
+      margin-bottom: 10px;
+    }
+
+    /* ── Tag Input 容器 ───────────────────────── */
+    #tag-input-wrap {
+      position: relative;
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 5px;
+      padding: 5px 8px;
+      border: 1.5px solid var(--border);
+      border-radius: 6px;
+      background: #fff;
+      cursor: text;
+      min-height: 38px;
+      transition: border-color .15s;
+    }
+    #tag-input-wrap:focus-within { border-color: var(--accent); }
+
+    /* 已选配方 tag，4个颜色对应表格列 */
+    .sel-tag {
+      display: inline-flex;
+      align-items: center;
+      gap: 3px;
+      padding: 2px 7px 2px 9px;
+      border-radius: 12px;
+      font-size: 12px;
+      font-weight: 500;
+      color: #fff;
+      white-space: nowrap;
+      max-width: 200px;
+    }
+    .sel-tag > span:first-child { overflow: hidden; text-overflow: ellipsis; }
+    .sel-tag:nth-of-type(1) { background: #2962ff; }
+    .sel-tag:nth-of-type(2) { background: #00897b; }
+    .sel-tag:nth-of-type(3) { background: #e65100; }
+    .sel-tag:nth-of-type(4) { background: #6a1b9a; }
+    .tag-remove { cursor: pointer; opacity: .7; font-size: 15px; line-height: 1; }
+    .tag-remove:hover { opacity: 1; }
+
+    #search-input {
+      border: none; outline: none;
+      font-size: 13px; font-family: inherit;
+      color: var(--text-main); background: transparent;
+      min-width: 140px; flex: 1;
+      padding: 2px 0;
+    }
+    #search-input::placeholder { color: var(--text-muted); }
+    #search-input:disabled { cursor: not-allowed; }
+
+    /* ── 下拉候选列表 ─────────────────────────── */
+    #dropdown {
+      display: none;
+      position: absolute;
+      top: calc(100% + 4px);
+      left: 0; right: 0;
+      background: #fff;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      box-shadow: 0 4px 16px rgba(0,0,0,.12);
+      max-height: 220px;
+      overflow-y: auto;
+      z-index: 100;
+    }
+    #dropdown.open { display: block; }
+    .dd-item {
+      padding: 8px 12px;
+      cursor: pointer;
+      font-size: 13px;
+      transition: background .1s;
+    }
+    .dd-item:hover, .dd-item.active { background: var(--accent-bg); color: var(--accent); }
+    .dd-item.no-result { color: var(--text-muted); cursor: default; }
+    .dd-item.no-result:hover { background: none; color: var(--text-muted); }
+    .dd-item mark { background: none; color: var(--accent); font-weight: 700; }
+
+    #hint { margin-top: 7px; font-size: 11.5px; color: var(--text-muted); }
+
+    /* ── 对比表格 ─────────────────────────────── */
+    #table-wrap {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      overflow: hidden;
+    }
+    #table-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+
+    table { border-collapse: collapse; width: 100%; min-width: 360px; }
+
+    thead tr { background: var(--header-bg); }
+    th {
+      padding: 9px 14px;
+      font-size: 12px;
+      font-weight: 700;
+      border-bottom: 2px solid var(--border);
+      border-right: 1px solid var(--border);
+      white-space: nowrap;
+      position: sticky; top: 0; z-index: 1;
+      background: var(--header-bg);
+      text-align: center;
+    }
+    th:last-child { border-right: none; }
+
+    /* 表头顶部色条 = tag 颜色 */
+    th.col-value:nth-child(2) { border-top: 3px solid #2962ff; }
+    th.col-value:nth-child(3) { border-top: 3px solid #00897b; }
+    th.col-value:nth-child(4) { border-top: 3px solid #e65100; }
+    th.col-value:nth-child(5) { border-top: 3px solid #6a1b9a; }
+
+    th.col-nutrient, td.col-nutrient {
+      text-align: left;
+      min-width: 170px; max-width: 220px;
+      position: sticky; left: 0; z-index: 2;
+    }
+    th.col-nutrient { z-index: 3; text-align: left; }
+    td.col-nutrient { background: #f8f9fd; font-weight: 500; color: var(--text-sub); }
+
+    tbody tr { border-bottom: 1px solid var(--border); }
+    tbody tr:last-child { border-bottom: none; }
+    tbody tr:nth-child(even) td          { background: var(--row-alt); }
+    tbody tr:nth-child(even) td.col-nutrient { background: #eff1f8; }
+
+    /* 差异行高亮，覆盖斑马纹 */
+    tbody tr.diff-row td              { background: var(--row-diff-bg) !important; }
+    tbody tr.diff-row td.col-value    { color: var(--row-diff-fg); font-weight: 600; }
+    tbody tr.diff-row td.col-nutrient { background: #fef3c7 !important; color: #92400e; }
+
+    tbody tr:hover td { background: var(--accent-bg) !important; }
+
+    td {
+      padding: 7px 14px;
+      border-right: 1px solid var(--border);
+      font-size: 13px;
+      text-align: center;
+    }
+    td:last-child { border-right: none; }
+    .null-val { color: var(--text-muted); }
+
+    /* ── 状态 & 骨架 ──────────────────────────── */
+    .state-box {
+      padding: 48px 20px;
+      text-align: center;
+      color: var(--text-muted);
+      font-size: 13px;
+      line-height: 1.8;
+    }
+    .state-box .icon { font-size: 28px; display: block; margin-bottom: 8px; }
+  </style>
+</head>
+<body>
+
+  <div id="selector-panel">
+    <div class="panel-title">选择配方进行对比（2–4个）</div>
+
+    <div id="tag-input-wrap">
+      <input id="search-input" type="text"
+             placeholder="输入关键词搜索配方…" autocomplete="off" />
+      <div id="dropdown"></div>
+    </div>
+
+    <div id="hint">请搜索并选择 2 至 4 个配方</div>
+  </div>
+
+  <div id="table-wrap">
+    <div id="table-scroll">
+      <div class="state-box">
+        <span class="icon">🔬</span>
+        请在上方搜索并选择 2 至 4 个配方，<br>即可展开成分对比表
+      </div>
+    </div>
+  </div>
+
+<script>
+// ─────────────────────────────────────────────────────────────────────────────
+// ★ 配置区：Table ID 区分大小写，若加载失败用 listTables() 确认
+// ─────────────────────────────────────────────────────────────────────────────
+const TABLE_FORMULA         = 'formula';
+const TABLE_NUTRITION_FACTS = 'nutrition_facts';
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 全局状态
+// ─────────────────────────────────────────────────────────────────────────────
+let formulaRowIdToName = {};
+let formulaList        = [];   // [{ id, name }]
+let allFacts           = [];   // nutrition_facts 行对象数组
+let selected           = [];   // 已选 formula_name_cn 字符串（最多4个）
+let ddActiveIdx        = -1;   // 下拉键盘激活索引
+
+const searchInput = document.getElementById('search-input');
+const dropdown    = document.getElementById('dropdown');
+const tagWrap     = document.getElementById('tag-input-wrap');
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 初始化 & 数据加载
+// ─────────────────────────────────────────────────────────────────────────────
+grist.ready({ requiredAccess: 'read table' });
+
+async function loadData() {
+  try {
+    const [formulaData, nutritionData] = await Promise.all([
+      grist.docApi.fetchTable(TABLE_FORMULA),
+      grist.docApi.fetchTable(TABLE_NUTRITION_FACTS)
+    ]);
+
+    // formula 表：rowId → name 映射
+    const fIds   = formulaData.id;
+    const fNames = formulaData.formula_name_cn;
+    formulaList = [];
+    formulaRowIdToName = {};
+    for (let i = 0; i < fIds.length; i++) {
+      formulaRowIdToName[fIds[i]] = fNames[i];
+      formulaList.push({ id: fIds[i], name: fNames[i] });
+    }
+
+    // nutrition_facts 表
+    // formula_name_cn → Reference，用映射表解析
+    // nutrient_name_cn_text → 公式字段，直接是字符串
+    // nutrient_fact_order   → 公式字段，直接是数值
+    const len = nutritionData.id.length;
+    allFacts = [];
+    for (let i = 0; i < len; i++) {
+      allFacts.push({
+        formulaName:  formulaRowIdToName[nutritionData.formula_name_cn[i]] ?? null,
+        nutrientName: nutritionData.nutrient_name_cn_text[i] ?? null,
+        unit:         nutritionData.nutrient_fact_unit[i] ?? '',
+        value:        nutritionData.nutrient_value[i],
+        order:        nutritionData.nutrient_fact_order[i] ?? 9999
+      });
+    }
+
+  } catch (err) {
+    let tableList = '';
+    try {
+      const tables = await grist.docApi.listTables();
+      tableList = '<br><br>文档中存在以下表：'
+        + tables.map(t =>
+            `<code style="background:#f0f0f0;padding:1px 5px;border-radius:3px">${t}</code>`
+          ).join('　');
+    } catch (_) {}
+    tagWrap.innerHTML =
+      `<span style="color:#c62828;font-size:12px">⚠ 加载失败：${err.message}${tableList}</span>`;
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 搜索框交互
+// ─────────────────────────────────────────────────────────────────────────────
+
+// 点击 wrap 任意位置都聚焦输入框
+tagWrap.addEventListener('mousedown', e => {
+  if (e.target !== searchInput && !e.target.closest('.tag-remove')) {
+    e.preventDefault();
+    searchInput.focus();
+  }
+});
+
+searchInput.addEventListener('input', () => {
+  ddActiveIdx = -1;
+  renderDropdown();
+});
+
+searchInput.addEventListener('focus', renderDropdown);
+
+searchInput.addEventListener('keydown', e => {
+  const items = [...dropdown.querySelectorAll('.dd-item:not(.no-result)')];
+  if (e.key === 'ArrowDown') {
+    e.preventDefault();
+    ddActiveIdx = Math.min(ddActiveIdx + 1, items.length - 1);
+    syncActive(items);
+  } else if (e.key === 'ArrowUp') {
+    e.preventDefault();
+    ddActiveIdx = Math.max(ddActiveIdx - 1, 0);
+    syncActive(items);
+  } else if (e.key === 'Enter') {
+    e.preventDefault();
+    if (ddActiveIdx >= 0 && items[ddActiveIdx]) {
+      selectFormula(items[ddActiveIdx].dataset.name);
+    }
+  } else if (e.key === 'Escape') {
+    closeDropdown();
+  } else if (e.key === 'Backspace' && searchInput.value === '' && selected.length > 0) {
+    // 空输入框按退格 → 移除最后一个 tag
+    removeFormula(selected[selected.length - 1]);
+  }
+});
+
+document.addEventListener('mousedown', e => {
+  if (!tagWrap.contains(e.target)) closeDropdown();
+});
+
+function renderDropdown() {
+  const q = searchInput.value.trim().toLowerCase();
+  const candidates = formulaList.filter(f =>
+    !selected.includes(f.name) &&
+    (q === '' || f.name.toLowerCase().includes(q))
+  );
+
+  if (candidates.length === 0) {
+    const msg = q ? '没有匹配的配方'
+               : formulaList.length === 0 ? '数据加载中…'
+               : '所有配方均已选中';
+    dropdown.innerHTML = `<div class="dd-item no-result">${msg}</div>`;
+  } else {
+    dropdown.innerHTML = candidates.map(f => {
+      const label = q
+        ? f.name.replace(new RegExp(escRe(q), 'gi'), m => `<mark>${esc(m)}</mark>`)
+        : esc(f.name);
+      return `<div class="dd-item" data-name="${esc(f.name)}">${label}</div>`;
+    }).join('');
+
+    dropdown.querySelectorAll('.dd-item').forEach(item => {
+      item.addEventListener('mousedown', e => {
+        e.preventDefault();
+        selectFormula(item.dataset.name);
+      });
+    });
+  }
+
+  // 选满4个时不再展示下拉
+  dropdown.classList.toggle('open', selected.length < 4);
+}
+
+function syncActive(items) {
+  items.forEach((el, i) => el.classList.toggle('active', i === ddActiveIdx));
+}
+
+function closeDropdown() {
+  dropdown.classList.remove('open');
+  ddActiveIdx = -1;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 选中 / 移除
+// ─────────────────────────────────────────────────────────────────────────────
+function selectFormula(name) {
+  if (selected.includes(name) || selected.length >= 4) return;
+  selected.push(name);
+  searchInput.value = '';
+  afterSelectionChange();
+}
+
+function removeFormula(name) {
+  selected = selected.filter(n => n !== name);
+  afterSelectionChange();
+}
+
+function afterSelectionChange() {
+  renderTags();
+  updateHint();
+  renderDropdown();
+  renderTable();
+  const full = selected.length >= 4;
+  searchInput.disabled    = full;
+  searchInput.placeholder = full ? '已选满 4 个配方' : selected.length > 0 ? '继续搜索…' : '输入关键词搜索配方…';
+  if (!full) searchInput.focus();
+}
+
+function renderTags() {
+  tagWrap.querySelectorAll('.sel-tag').forEach(el => el.remove());
+  // 正序插入到 input 之前，保持 nth-of-type 颜色与选中顺序对应
+  selected.forEach((name, i) => {
+    const tag = document.createElement('span');
+    tag.className = 'sel-tag';
+    tag.innerHTML =
+      `<span>${esc(name)}</span>` +
+      `<span class="tag-remove" data-name="${esc(name)}">×</span>`;
+    tag.querySelector('.tag-remove').addEventListener('click', e => {
+      removeFormula(e.currentTarget.dataset.name);
+    });
+    tagWrap.insertBefore(tag, searchInput);
+  });
+}
+
+function updateHint() {
+  const n = selected.length;
+  const hint = document.getElementById('hint');
+  if      (n === 0) hint.textContent = '请搜索并选择 2 至 4 个配方';
+  else if (n === 1) hint.textContent = '已选 1 个，还需至少再选 1 个';
+  else              hint.textContent = `已选 ${n} 个配方${n < 4 ? `，还可再选 ${4 - n} 个` : '（已达上限）'}`;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 渲染对比表格
+// ─────────────────────────────────────────────────────────────────────────────
+function renderTable() {
+  const scroll = document.getElementById('table-scroll');
+
+  if (selected.length < 2) {
+    scroll.innerHTML = `<div class="state-box"><span class="icon">🔬</span>
+      请在上方搜索并选择 2 至 4 个配方，<br>即可展开成分对比表</div>`;
+    return;
+  }
+
+  const relevantFacts = allFacts.filter(r => selected.includes(r.formulaName));
+
+  // 收集所有营养素，按 order 升序
+  const nutrientMap = new Map();
+  for (const row of relevantFacts) {
+    if (!nutrientMap.has(row.nutrientName)) {
+      nutrientMap.set(row.nutrientName, { unit: row.unit, order: row.order });
+    }
+  }
+  const nutrients = [...nutrientMap.entries()].sort((a, b) => a[1].order - b[1].order);
+
+  // 二维查找表：formula → nutrient → value
+  const lookup = {};
+  for (const name of selected) lookup[name] = {};
+  for (const row of relevantFacts) {
+    if (lookup[row.formulaName]) lookup[row.formulaName][row.nutrientName] = row.value;
+  }
+
+  let html = '<table><thead><tr><th class="col-nutrient">营养成分</th>';
+  for (const name of selected) html += `<th class="col-value">${esc(name)}</th>`;
+  html += '</tr></thead><tbody>';
+
+  for (const [nutrientName, { unit }] of nutrients) {
+    // 格式化每列的值
+    const rowVals = selected.map(f => {
+      const raw = lookup[f][nutrientName];
+      return (raw != null && raw !== '') ? formatVal(raw) : null;
+    });
+
+    // 差异检测：≥2个非空值且不完全相同
+    const nonNull = rowVals.filter(v => v !== null);
+    const hasDiff = nonNull.length >= 2 && new Set(nonNull).size > 1;
+
+    const label = unit ? `${nutrientName}（${unit}）` : nutrientName;
+    html += `<tr${hasDiff ? ' class="diff-row"' : ''}>`;
+    html += `<td class="col-nutrient">${esc(label)}</td>`;
+    for (const v of rowVals) {
+      html += v !== null
+        ? `<td class="col-value">${esc(v)}</td>`
+        : `<td class="col-value null-val">—</td>`;
+    }
+    html += '</tr>';
+  }
+
+  html += '</tbody></table>';
+  scroll.innerHTML = html;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 工具函数
+// ─────────────────────────────────────────────────────────────────────────────
+
+// 四舍五入至最多2位小数，去除尾随零
+// 非数字值（如"适量"）原样返回
+function formatVal(val) {
+  const n = Number(val);
+  if (isNaN(n)) return String(val);
+  return parseFloat(n.toFixed(2)).toString();
+}
+
+function esc(str) {
+  return String(str)
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;')
+    .replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function escRe(str) {
+  return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+loadData();
+</script>
+</body>
+</html>
