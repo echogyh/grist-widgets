@@ -242,6 +242,13 @@
 
 <script>
 // ─────────────────────────────────────────────────────────────────────────────
+// ★ 配置区：如果加载失败，请先用 grist.docApi.listTables() 查出真实 Table ID
+//   然后把下面两个值改成对应的 Table ID（区分大小写）
+// ─────────────────────────────────────────────────────────────────────────────
+const TABLE_FORMULA        = 'formula';        // formula 表的 Table ID
+const TABLE_NUTRITION_FACTS = 'nutrition_facts'; // nutrition_facts 表的 Table ID
+
+// ─────────────────────────────────────────────────────────────────────────────
 // 全局状态
 // ─────────────────────────────────────────────────────────────────────────────
 let formulaRowIdToName = {};  // { gristRowId: formula_name_cn }
@@ -258,8 +265,8 @@ async function loadData() {
   try {
     // 并行拉取两张表
     const [formulaData, nutritionData] = await Promise.all([
-      grist.docApi.fetchTable('formula'),
-      grist.docApi.fetchTable('nutrition_facts')
+      grist.docApi.fetchTable(TABLE_FORMULA),
+      grist.docApi.fetchTable(TABLE_NUTRITION_FACTS)
     ]);
 
     // ── 解析 formula 表 ──────────────────────────────────────────────────────
@@ -293,8 +300,16 @@ async function loadData() {
     renderChips();
 
   } catch (err) {
+    // 加载失败时，尝试列出文档内所有表名，帮助定位正确的 Table ID
+    let tableList = '';
+    try {
+      const tables = await grist.docApi.listTables();
+      tableList = `<br><br>当前文档中存在以下表（请核对 Table ID 后修改代码顶部的配置）：<br>`
+        + tables.map(t => `<code style="background:#f0f0f0;padding:1px 5px;border-radius:3px">${t}</code>`).join('　');
+    } catch (_) { /* listTables 也失败则不显示 */ }
+
     document.getElementById('chips-container').innerHTML =
-      `<span style="color:#c62828;font-size:12px">⚠ 数据加载失败：${err.message}</span>`;
+      `<span style="color:#c62828;font-size:12px">⚠ 数据加载失败：${err.message}${tableList}</span>`;
   }
 }
 
