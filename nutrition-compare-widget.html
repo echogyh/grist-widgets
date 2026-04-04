@@ -1,0 +1,447 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>配方营养成分对比</title>
+  <script src="https://docs.getgrist.com/grist-plugin-api.js"></script>
+  <style>
+    /* ── 基础重置 ─────────────────────────────── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:         #f7f8fa;
+      --surface:    #ffffff;
+      --border:     #e3e6ec;
+      --text-main:  #1a1d24;
+      --text-sub:   #5f6577;
+      --text-muted: #9ba3b8;
+      --accent:     #2962ff;
+      --accent-bg:  #e8eeff;
+      --chip-bg:    #eef0f5;
+      --row-alt:    #f4f6fb;
+      --header-bg:  #f0f3ff;
+      --shadow:     0 1px 4px rgba(0,0,0,.08);
+      --radius:     8px;
+    }
+
+    body {
+      font-family: 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', sans-serif;
+      font-size: 13px;
+      background: var(--bg);
+      color: var(--text-main);
+      padding: 14px 16px;
+      min-height: 100vh;
+    }
+
+    /* ── 选择器面板 ───────────────────────────── */
+    #selector-panel {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 12px 14px;
+      margin-bottom: 14px;
+      box-shadow: var(--shadow);
+    }
+
+    .panel-title {
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: .06em;
+      text-transform: uppercase;
+      color: var(--text-sub);
+      margin-bottom: 10px;
+    }
+
+    #chips-container {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      min-height: 28px;
+    }
+
+    /* 每个配方是一个可点击的 chip */
+    .chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      padding: 4px 11px;
+      border-radius: 20px;
+      border: 1.5px solid var(--border);
+      background: var(--chip-bg);
+      color: var(--text-sub);
+      font-size: 12px;
+      font-weight: 500;
+      cursor: pointer;
+      user-select: none;
+      transition: background .12s, color .12s, border-color .12s, opacity .12s;
+      white-space: nowrap;
+    }
+    .chip:hover:not(.disabled) {
+      border-color: var(--accent);
+      color: var(--accent);
+      background: var(--accent-bg);
+    }
+    .chip.selected {
+      background: var(--accent);
+      border-color: var(--accent);
+      color: #fff;
+    }
+    /* 已选满4个时，未选中的 chip 变灰不可点 */
+    .chip.disabled {
+      opacity: .35;
+      cursor: not-allowed;
+    }
+
+    /* 选中的 chip 右侧的 × 按钮 */
+    .chip-remove {
+      font-size: 14px;
+      line-height: 1;
+      opacity: .75;
+      margin-left: 1px;
+    }
+    .chip-remove:hover { opacity: 1; }
+
+    #hint {
+      margin-top: 8px;
+      font-size: 11.5px;
+      color: var(--text-muted);
+    }
+
+    /* ── 表格容器 ─────────────────────────────── */
+    #table-wrap {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      overflow: hidden;           /* 圆角裁剪 */
+    }
+
+    #table-scroll {
+      overflow-x: auto;
+      -webkit-overflow-scrolling: touch;
+    }
+
+    /* ── 比较表格 ─────────────────────────────── */
+    table {
+      border-collapse: collapse;
+      width: 100%;
+      min-width: 360px;
+    }
+
+    /* 表头行 */
+    thead tr {
+      background: var(--header-bg);
+    }
+    th {
+      padding: 9px 14px;
+      font-size: 12px;
+      font-weight: 700;
+      border-bottom: 2px solid var(--border);
+      border-right: 1px solid var(--border);
+      white-space: nowrap;
+      position: sticky;
+      top: 0;
+      z-index: 1;
+      background: var(--header-bg);
+    }
+    th:last-child { border-right: none; }
+
+    /* 左侧营养素列 */
+    th.col-nutrient,
+    td.col-nutrient {
+      text-align: left;
+      min-width: 170px;
+      max-width: 220px;
+      position: sticky;
+      left: 0;
+      z-index: 2;
+    }
+    th.col-nutrient { z-index: 3; background: var(--header-bg); }
+    td.col-nutrient { background: #f8f9fd; font-weight: 500; color: var(--text-sub); }
+
+    /* 数值列 */
+    th.col-value { text-align: center; min-width: 100px; }
+    td.col-value { text-align: center; color: var(--text-main); }
+
+    /* 每列对应不同的配方，用细分色区分表头 */
+    th.col-value:nth-child(2) { border-top: 3px solid #2962ff; }
+    th.col-value:nth-child(3) { border-top: 3px solid #00897b; }
+    th.col-value:nth-child(4) { border-top: 3px solid #e65100; }
+    th.col-value:nth-child(5) { border-top: 3px solid #6a1b9a; }
+
+    /* 数据行 */
+    tbody tr {
+      border-bottom: 1px solid var(--border);
+      transition: background .08s;
+    }
+    tbody tr:last-child { border-bottom: none; }
+    tbody tr:nth-child(even) td { background: var(--row-alt); }
+    tbody tr:nth-child(even) td.col-nutrient { background: #eff1f8; }
+    tbody tr:hover td { background: #e8eeff !important; }
+
+    td {
+      padding: 7px 14px;
+      border-right: 1px solid var(--border);
+      font-size: 13px;
+    }
+    td:last-child { border-right: none; }
+
+    /* 空值用破折号，颜色更淡 */
+    .null-val { color: var(--text-muted); }
+
+    /* ── 空/加载 状态 ─────────────────────────── */
+    .state-box {
+      padding: 48px 20px;
+      text-align: center;
+      color: var(--text-muted);
+      font-size: 13px;
+      line-height: 1.7;
+    }
+    .state-box .icon { font-size: 28px; display: block; margin-bottom: 8px; }
+
+    /* ── 加载动画 ─────────────────────────────── */
+    .skeleton-chip {
+      display: inline-block;
+      height: 28px;
+      width: 80px;
+      border-radius: 20px;
+      background: linear-gradient(90deg, #eef0f5 25%, #e3e6ec 50%, #eef0f5 75%);
+      background-size: 200% 100%;
+      animation: shimmer 1.2s infinite;
+    }
+    @keyframes shimmer {
+      0%   { background-position: 200% 0; }
+      100% { background-position: -200% 0; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- 配方选择区 -->
+  <div id="selector-panel">
+    <div class="panel-title">选择配方进行对比（2–4个）</div>
+    <div id="chips-container">
+      <!-- 加载时显示骨架屏 chip -->
+      <span class="skeleton-chip"></span>
+      <span class="skeleton-chip" style="width:100px"></span>
+      <span class="skeleton-chip" style="width:70px"></span>
+    </div>
+    <div id="hint"></div>
+  </div>
+
+  <!-- 对比表格 -->
+  <div id="table-wrap">
+    <div id="table-scroll">
+      <div class="state-box" id="empty-state">
+        <span class="icon">🔬</span>
+        请在上方选择 2 至 4 个配方，<br>即可展开成分对比表
+      </div>
+    </div>
+  </div>
+
+<script>
+// ─────────────────────────────────────────────────────────────────────────────
+// 全局状态
+// ─────────────────────────────────────────────────────────────────────────────
+let formulaRowIdToName = {};  // { gristRowId: formula_name_cn }
+let formulaList = [];         // [{ id, name }]，用于渲染 chips（按 formula 表顺序）
+let allFacts = [];            // nutrition_facts 行对象数组
+let selected = [];            // 当前选中的 formula_name_cn 字符串数组（最多4个）
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Grist 初始化 & 数据加载
+// ─────────────────────────────────────────────────────────────────────────────
+grist.ready({ requiredAccess: 'read table' });
+
+async function loadData() {
+  try {
+    // 并行拉取两张表
+    const [formulaData, nutritionData] = await Promise.all([
+      grist.docApi.fetchTable('formula'),
+      grist.docApi.fetchTable('nutrition_facts')
+    ]);
+
+    // ── 解析 formula 表 ──────────────────────────────────────────────────────
+    // Grist fetchTable 返回列式数据：{ id: [...], formula_name_cn: [...], ... }
+    // id 是 Grist 内部行 ID，Reference 字段存储的就是这个值
+    const fRowIds   = formulaData.id;
+    const fNames    = formulaData.formula_name_cn;
+
+    formulaList = [];
+    formulaRowIdToName = {};
+    for (let i = 0; i < fRowIds.length; i++) {
+      formulaRowIdToName[fRowIds[i]] = fNames[i];
+      formulaList.push({ id: fRowIds[i], name: fNames[i] });
+    }
+
+    // ── 解析 nutrition_facts 表 ──────────────────────────────────────────────
+    // formula_name_cn 列是 Reference 类型，fetchTable 返回被引用行的 Grist row ID（整数）
+    const len = nutritionData.id.length;
+    allFacts = [];
+    for (let i = 0; i < len; i++) {
+      allFacts.push({
+        // 将 Reference row ID 解析为实际的 formula_name_cn 字符串
+        formulaName:  formulaRowIdToName[nutritionData.formula_name_cn[i]] ?? null,
+        nutrientName: nutritionData.nutrient_name_cn[i],
+        unit:         nutritionData.nutrient_fact_unit[i] ?? '',
+        value:        nutritionData.nutrient_value[i],
+        order:        nutritionData.nutrient_fact_order[i] ?? 9999
+      });
+    }
+
+    renderChips();
+
+  } catch (err) {
+    document.getElementById('chips-container').innerHTML =
+      `<span style="color:#c62828;font-size:12px">⚠ 数据加载失败：${err.message}</span>`;
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 渲染配方 Chips
+// ─────────────────────────────────────────────────────────────────────────────
+function renderChips() {
+  const container = document.getElementById('chips-container');
+  container.innerHTML = '';
+
+  for (const f of formulaList) {
+    const chip = document.createElement('span');
+    chip.className = 'chip';
+    chip.dataset.name = f.name;
+
+    // 文字
+    const label = document.createElement('span');
+    label.textContent = f.name;
+    chip.appendChild(label);
+
+    // 点击事件
+    chip.addEventListener('click', () => {
+      const name = chip.dataset.name;
+      if (selected.includes(name)) {
+        // 已选中 → 取消选择
+        selected = selected.filter(n => n !== name);
+      } else {
+        // 未选中 → 如果未达上限则添加
+        if (selected.length >= 4) return;
+        selected.push(name);
+      }
+      updateChipStyles();
+      renderTable();
+    });
+
+    container.appendChild(chip);
+  }
+
+  updateChipStyles();
+  updateHint();
+}
+
+function updateChipStyles() {
+  const isFull = selected.length >= 4;
+  document.querySelectorAll('.chip').forEach(chip => {
+    const name = chip.dataset.name;
+    const isSelected = selected.includes(name);
+    chip.className = 'chip'
+      + (isSelected ? ' selected' : '')
+      + (isFull && !isSelected ? ' disabled' : '');
+  });
+  updateHint();
+}
+
+function updateHint() {
+  const n = selected.length;
+  const hint = document.getElementById('hint');
+  if (n === 0)      hint.textContent = '请点击配方名称进行选择';
+  else if (n === 1) hint.textContent = '已选 1 个，还需至少再选 1 个';
+  else              hint.textContent = `已选 ${n} 个配方${n < 4 ? `，还可再选 ${4 - n} 个` : '（已达上限）'}`;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 渲染对比表
+// ─────────────────────────────────────────────────────────────────────────────
+function renderTable() {
+  const scroll = document.getElementById('table-scroll');
+
+  if (selected.length < 2) {
+    scroll.innerHTML = `
+      <div class="state-box" id="empty-state">
+        <span class="icon">🔬</span>
+        请在上方选择 2 至 4 个配方，<br>即可展开成分对比表
+      </div>`;
+    return;
+  }
+
+  // ── Step 1：过滤出选中配方的成分数据 ──────────────────────────────────────
+  const relevantFacts = allFacts.filter(r => selected.includes(r.formulaName));
+
+  // ── Step 2：收集所有出现过的营养素，按 nutrient_fact_order 升序排列 ────────
+  // 用 Map 记录：nutrient_name_cn → { unit, order }
+  // 如果同名营养素在不同配方里 order 不同，取最小值（保守策略）
+  const nutrientMap = new Map();
+  for (const row of relevantFacts) {
+    const existing = nutrientMap.get(row.nutrientName);
+    if (!existing) {
+      nutrientMap.set(row.nutrientName, { unit: row.unit, order: row.order });
+    } else if (row.order < existing.order) {
+      // 取更小的 order，让排序更稳定
+      nutrientMap.set(row.nutrientName, { unit: existing.unit || row.unit, order: row.order });
+    }
+  }
+
+  // 按 order 升序排列为数组
+  const nutrients = [...nutrientMap.entries()]
+    .sort((a, b) => a[1].order - b[1].order);
+
+  // ── Step 3：建立快速查找表 formula → nutrient → value ────────────────────
+  // lookup[formulaName][nutrientName] = value
+  const lookup = {};
+  for (const name of selected) lookup[name] = {};
+  for (const row of relevantFacts) {
+    if (lookup[row.formulaName]) {
+      lookup[row.formulaName][row.nutrientName] = row.value;
+    }
+  }
+
+  // ── Step 4：拼 HTML ───────────────────────────────────────────────────────
+  let html = '<table><thead><tr>';
+  html += '<th class="col-nutrient">营养成分</th>';
+  for (const name of selected) {
+    html += `<th class="col-value">${esc(name)}</th>`;
+  }
+  html += '</tr></thead><tbody>';
+
+  for (const [nutrientName, { unit }] of nutrients) {
+    // 左列：名称 + 单位，如 "脂肪（g）"；无单位则只显示名称
+    const label = unit ? `${nutrientName}（${unit}）` : nutrientName;
+    html += `<tr><td class="col-nutrient">${esc(label)}</td>`;
+    for (const formulaName of selected) {
+      const val = lookup[formulaName][nutrientName];
+      if (val != null && val !== '') {
+        html += `<td class="col-value">${esc(String(val))}</td>`;
+      } else {
+        html += `<td class="col-value null-val">—</td>`;
+      }
+    }
+    html += '</tr>';
+  }
+
+  html += '</tbody></table>';
+  scroll.innerHTML = html;
+}
+
+// 简单的 HTML 特殊字符转义，防止名称里有 < > & 导致渲染错误
+function esc(str) {
+  return str
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 启动
+// ─────────────────────────────────────────────────────────────────────────────
+loadData();
+</script>
+</body>
+</html>
